@@ -1,5 +1,0 @@
-name = "routed_worker"
-description = "Complete one task with the model selected by the Jev router."
-developer_instructions = """
-Complete the delegated user request. Preserve its constraints and return the result to the parent agent.
-"""

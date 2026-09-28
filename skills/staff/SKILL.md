@@ -22,6 +22,9 @@ discussed command. The parent stays in this chat. Python owns the workflow.
    Use the actual harness: `claude`, `codex`, `pi`, or `grok`.
 2. Keep the returned `run_id`. Execute only its pending `action`, following its
    `instructions` and `payload`. Use native harness tools to run requested agents.
+   Keep the parent and agents in normal execution mode, including the planning
+   phase. Planning returns an implementation plan; do not enter Plan mode or
+   request a mode switch.
    Write their actual result as JSON matching `result_schema` to a temporary file:
 
    ```sh

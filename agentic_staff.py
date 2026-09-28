@@ -199,7 +199,9 @@ def codex_agent_files() -> dict[str, str]:
             f"Staff planning worker for {severity} severity.",
             spec["model"],
             spec["effort"],
-            "Plan only. Do not edit files and do not open a pull request. "
+            "Use normal execution mode. Do not enter Plan mode or request a mode switch. "
+            "Produce the implementation plan as your response. "
+            "Do not edit files and do not open a pull request. "
             "Do not switch model or reasoning effort.",
         )
     for severity, spec in EXECUTION.items():

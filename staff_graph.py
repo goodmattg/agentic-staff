@@ -208,7 +208,10 @@ class Plan(BaseNode[RunState, None, dict]):
             "plan",
             "Load the selected conversations and their referenced files when available. "
             + agent_instructions(state, "planning")
-            + "Ask it to plan only. Give it the query, context, testing instruction, current PR, "
+            + "Keep the parent and planning agent in normal execution mode. "
+            "Do not enter Plan mode or request a mode switch. "
+            "Ask it to return an implementation plan. "
+            "Give it the query, context, testing instruction, current PR, "
             "and kept findings. It must not edit or execute the entire workflow.",
             {
                 "ticket": state.ticket,
@@ -517,7 +520,7 @@ def main():
     args = parser.parse_args()
     try:
         if args.command == "diagram":
-            print(GRAPH.render(title="Staff workflow"))
+            print(GRAPH.render(direction="LR"))
             return
         # The default path performs no classification and creates no local state.
         if args.command == "start" and not args.explicit:

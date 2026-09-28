@@ -1,5 +1,5 @@
 interface:
   display_name: "Staff graph"
-  short_description: "Display the current staff graph inline"
+  short_description: "Show a compact staff graph with a clickable browser link"
 policy:
   allow_implicit_invocation: false

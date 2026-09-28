@@ -10,5 +10,4 @@ else
   echo "uv is not installed" >&2
   exit 1
 fi
-OUTPUT=$(mktemp -d "${TMPDIR:-/tmp}/staff-graph.XXXXXX")
-exec "$UV" run --locked --project "$ROOT" python "$ROOT/render_graph.py" --output-dir "$OUTPUT"
+exec "$UV" run --locked --project "$ROOT" python "$ROOT/render_graph.py" --serve

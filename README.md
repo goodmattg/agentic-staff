@@ -29,23 +29,26 @@ Native agent providers and Jev retain their existing authentication requirements
 
 ## Workflow
 
-In Codex, invoke `$staff-graph` to generate a fresh PNG without progress narration.
-Clients with image display support show it inline; Codex CLI gets PNG and HTML links.
+In Codex, invoke `$staff-graph` to generate a fresh horizontal diagram and a
+clickable localhost URL. Clients with image display support also show the PNG
+inline; Codex CLI gets a PNG file link.
 The explicit-only skill imports the current Python graph and renders it locally;
 it does not start a staff run. The installer adds it to `~/.codex/skills`.
 
-[Open the browser view](docs/workflow.html) for a rendered graph with zoom controls.
-It is a standalone local file. To regenerate it from the executable graph and open it:
+The browser view contains the diagram and zoom controls. To generate it from the
+executable graph and open it:
 
 ```sh
 uv run --locked python render_graph.py --open
 ```
 
-Rendering uses Mermaid CLI (`mmdc`); the generated view requires no server or account.
+Rendering uses Mermaid CLI (`mmdc`). `--serve` prints a clickable URL; `--open`
+also opens it. The viewer binds only to `127.0.0.1` and stops after an hour without
+requests. The generated HTML also works as a standalone local file.
 The renderer was verified with `@mermaid-js/mermaid-cli@11.16.0` and local Chrome.
-It also writes `workflow.png` and `workflow.mmd`. Use `--output-dir PATH` to
-generate all artifacts outside the repository.
-[SVG image](docs/workflow.svg) · [Mermaid source](docs/workflow.md).
+Artifacts (`workflow.html`, `.svg`, `.png`, and `.mmd`) go into a new temporary
+directory by default. Use `--output-dir PATH` to choose another location.
+Generated diagrams are not checked in; each invocation uses the current graph.
 To print Mermaid directly:
 
 ```sh
@@ -54,6 +57,8 @@ skills/staff/scripts/staff diagram
 
 A knowledge question returns directly to the parent. A code change requests
 context, planning, execution, five independent reviews, and PR finalization.
+The parent and planning agents stay in normal execution mode. The planning phase
+returns an implementation plan without entering the harness's Plan mode.
 Kept review findings cause another pass up to the ticket's loop cap. An empty
 review ends the loop early. Unresolved findings force low confidence. High
 confidence requires ready PR confirmation and worktree removal; low confidence
