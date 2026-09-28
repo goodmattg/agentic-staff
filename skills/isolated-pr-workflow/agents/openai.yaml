@@ -1,0 +1,4 @@
+interface:
+  display_name: "Isolated PR Workflow"
+  short_description: "Work in a temporary worktree and open a PR"
+  default_prompt: "Use $isolated-pr-workflow to do this on a new worktree branch off main, capture browser screenshots or video for the PR, open a ready-for-review PR with the repository template, then clean up the worktree."

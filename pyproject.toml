@@ -1,9 +1,10 @@
 [project]
 name = "agentic-staff"
 version = "0.1.0"
-description = "Small Jev model router for Codex tasks."
+description = "Explicit Pydantic Graph workflow for native coding agents."
 requires-python = ">=3.10"
 dependencies = [
+    "pydantic-graph==2.51.0",
     "python-dotenv>=1.0",
     "typesafe-sdk>=0.6,<0.7",
 ]

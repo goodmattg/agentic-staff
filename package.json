@@ -1,0 +1,17 @@
+{
+  "name": "agentic-staff",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Explicit staff workflow backed by Pydantic Graph.",
+  "keywords": [
+    "pi-package"
+  ],
+  "pi": {
+    "skills": [
+      "./skills"
+    ],
+    "prompts": [
+      "./hosts/pi"
+    ]
+  }
+}

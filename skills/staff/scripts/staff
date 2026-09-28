@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+SKILL_DIR=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd -P)
+ROOT=$(CDPATH= cd -- "$SKILL_DIR/../.." && pwd -P)
+if command -v uv >/dev/null 2>&1; then
+  UV=$(command -v uv)
+elif [ -x "$HOME/.local/bin/uv" ]; then
+  UV=$HOME/.local/bin/uv
+else
+  echo "uv is not installed" >&2
+  exit 1
+fi
+exec "$UV" run --locked --project "$ROOT" python "$ROOT/staff_graph.py" "$@"

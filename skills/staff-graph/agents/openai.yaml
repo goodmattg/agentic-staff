@@ -1,0 +1,5 @@
+interface:
+  display_name: "Staff graph"
+  short_description: "Display the current staff graph inline"
+policy:
+  allow_implicit_invocation: false

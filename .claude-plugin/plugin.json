@@ -1,0 +1,6 @@
+{
+  "name": "agentic-staff",
+  "version": "0.2.0",
+  "description": "Explicit staff workflow backed by Pydantic Graph.",
+  "skills": "./skills"
+}

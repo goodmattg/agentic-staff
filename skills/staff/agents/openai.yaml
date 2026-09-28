@@ -1,0 +1,5 @@
+interface:
+  display_name: "Staff"
+  short_description: "Explicit graph orchestration for coding agents"
+policy:
+  allow_implicit_invocation: false

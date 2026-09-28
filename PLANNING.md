@@ -4,7 +4,9 @@ We approach problems with curiosity and optimism.
 
 # Operating Loop
 
-A `[[QUERY]]` comes in via the user interface.
+An explicitly invoked staff `[[QUERY]]` comes in via the user interface. Ordinary
+requests and followups use the base model. `staff_graph.py` is the executable
+workflow; the skill only bridges its requested actions to native harness tools.
 
 Branch if the `[[QUERY]]` is `[TYPE-QUERY-KQ]` or`[TYPE-QUERY-CCR]` using `[[JEV]]`
 
@@ -54,21 +56,23 @@ The development of an experimental feature in the platform that is not intended 
 
 Apply `[[JEV]]` to determine the scopes of ticket. We apply a separate filter to each in `[[JEV]]` with a moderately high confidence threshold. Ticket can take on one or more scopes. Then move to `[STEP-DECIDE-SEVERITY]`.
 
+Ask where the user encounters the problem, not which code we expect to edit. A named page counts as frontend even when the sentence does not say the layout will change.
+
 #### Frontend (`[TICKET-SCOPE-FRONTEND]`)
 
-A change that impacts the visual user interface. Including but not limited to design aesthetics, component styling, fonts, color changes, layout refactors, new pages that users will interact with as a visual medium.
+The user encounters this on a screen: a page, button, or other thing they can see.
 
 #### CI/CD (`[TICKET-SCOPE-CI-CD]`)
 
-Pertaining to the CI pipeline (e.g. Github Actions) or continuous deployment pipeline (Github Actions triggering automated docker image building, artifact uploads to cloud hosting, etc.)
+The user encounters this in the build or deploy pipeline.
 
 #### Cloud Infrastructure (`[TICKET-SCOPE-CLOUD-INFRA]`)
 
-An issue with any part of the cloud infrastructure requiring a change in either IaaS policy or via a cloud platform console. This can include but is not limited to AWS, Terraform, Vercel.
+The user encounters this in cloud infrastructure, such as AWS, Terraform, or Vercel.
 
 #### Backend (`[TICKET-SCOPE-BACKEND]`)
 
-An issue with the business logic running on either cloud infrastructure or on any piece of distributed software.
+The user encounters this through server or service behavior, such as an API or stored data.
 
 ### STEP: Decide the severity of the change (`[STEP-DECIDE-SEVERITY]`)
 
@@ -97,7 +101,7 @@ Applies to bugs that are not latent and impacting user features that are not cri
 - New-Feature: must be judged via `[[JEV]]` with high threshold to not impact existing functionality; existing functionality working is not contigent on success of the new feature (`[DECIDE-NEW-FEATURE-UNCOUPLED]`).
 - Experiment: never
 
-#### Critical `[TICKET-SEVERITY-MEDIUM]`
+#### Critical `[TICKET-SEVERITY-CRITICAL]`
 
 Final escalation severity point for all tickets.
 
@@ -123,7 +127,7 @@ Then move to `[STEP-DECIDE-TESTING-STANDARDS]`.
 
 ### STEP: Decide Testing Standards (`[STEP-DECIDE-TESTING-STANDARDS]`)
 
-The type and extent of testing in our execution plan is determined by the type of ticket and the availability of testing resources (e.g. jetson, mac, ubuntu desktop). Unless specified do not add unit tests. Unit tests for can be used by agent during development but should not be retained unless category below calls for it.
+The type and extent of testing in our execution plan is determined by the type of ticket and the scopes that cleared the threshold. If no scope cleared it, do not pick a testing row yet. Read the code the change touches, then apply the row for the layers that code is in. An empty scope list is not a reason to skip tests. Unless specified do not add unit tests. Unit tests can be used by the agent during development but should not be retained unless the category below calls for it.
 
 - UX change: no testing
 - infra gap causing bug: Dry-run of infra change if available, no unit tests. Post-execution end-to-end testing.

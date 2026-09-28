@@ -1,0 +1,14 @@
+{
+  "name": "agentic-staff",
+  "description": "Explicit staff workflow backed by Pydantic Graph.",
+  "plugins": [
+    {
+      "name": "agentic-staff",
+      "description": "Explicit staff workflow backed by Pydantic Graph.",
+      "source": {
+        "type": "local",
+        "path": "."
+      }
+    }
+  ]
+}
