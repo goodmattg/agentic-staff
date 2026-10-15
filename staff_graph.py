@@ -20,7 +20,7 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 from pydantic_graph import BaseNode, End, GraphBuilder, GraphRunContext
 
-import agentic_staff as jev
+import agentic_staff as decisions
 
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 Harness = Literal["claude", "codex", "pi", "grok"]
@@ -155,7 +155,7 @@ def exchange(state: RunState, kind: str, instructions: str, payload: dict):
 class Classify(BaseNode[RunState, None, dict]):
     async def run(self, ctx: GraphRunContext[RunState, None]) -> Context | Answer:
         state = ctx.state
-        decision = jev.classify(state.query)
+        decision = decisions.classify(state.query)
         state.query_kind = decision["query_kind"]
         state.history.append({"classification": decision})
         if state.query_kind == "kq":
@@ -180,7 +180,7 @@ class Context(BaseNode[RunState, None, dict]):
             return AwaitHost()
         selected = []
         for conversation in result.conversations:
-            if jev.relevance(state.query, conversation.text)["relevant"]:
+            if decisions.relevance(state.query, conversation.text)["relevant"]:
                 selected.append(conversation.model_dump())
         state.context = {**result.model_dump(), "conversations": selected}
         return Plan()
@@ -289,7 +289,7 @@ class Review(BaseNode[RunState, None, dict]):
 class Synthesize(BaseNode[RunState, None, dict]):
     async def run(self, ctx: GraphRunContext[RunState, None]) -> Plan | Confidence:
         state = ctx.state
-        state.findings = jev.filter_findings(state.query, state.findings)
+        state.findings = decisions.filter_findings(state.query, state.findings)
         state.loops += 1
         state.history.append({"pass": state.loops, "kept_findings": state.findings})
         if state.findings and state.loops < state.ticket["max_loops"]:
@@ -307,7 +307,7 @@ class Confidence(BaseNode[RunState, None, dict]):
             "max_loops": state.ticket["max_loops"],
             "testing": state.ticket["testing"],
         }
-        verdict = jev.confidence(state.query, json.dumps(evidence))["confidence"]
+        verdict = decisions.confidence(state.query, json.dumps(evidence))["confidence"]
         # A probabilistic confidence vote cannot override unresolved reviewer findings.
         state.confidence = "low" if state.findings else verdict
         state.history.append({"confidence": state.confidence})
@@ -497,7 +497,7 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     start = commands.add_parser("start", help="Start an explicitly invoked staff request")
     start.add_argument("--explicit", action="store_true")
-    start.add_argument("--harness", choices=jev.HARNESSES, required=True)
+    start.add_argument("--harness", choices=decisions.HARNESSES, required=True)
     start.add_argument("--workspace", type=Path, default=Path.cwd())
     query = start.add_mutually_exclusive_group(required=True)
     query.add_argument("--query")

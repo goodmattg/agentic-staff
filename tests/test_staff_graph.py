@@ -24,16 +24,16 @@ EXECUTION = {
 @pytest.fixture
 def store(tmp_path, monkeypatch):
     monkeypatch.setattr(
-        staff.jev,
+        staff.decisions,
         "classify",
         lambda _: {
             "query_kind": "ccr",
-            "ticket": staff.jev.ticket_payload("chore", ["backend"], {}, None),
+            "ticket": staff.decisions.ticket_payload("chore", ["backend"], {}, None),
         },
     )
-    monkeypatch.setattr(staff.jev, "relevance", lambda *_: {"relevant": False})
-    monkeypatch.setattr(staff.jev, "filter_findings", lambda _, findings: findings)
-    monkeypatch.setattr(staff.jev, "confidence", lambda *_: {"confidence": "high"})
+    monkeypatch.setattr(staff.decisions, "relevance", lambda *_: {"relevant": False})
+    monkeypatch.setattr(staff.decisions, "filter_findings", lambda _, findings: findings)
+    monkeypatch.setattr(staff.decisions, "confidence", lambda *_: {"confidence": "high"})
     return staff.RunStore(tmp_path)
 
 
@@ -61,14 +61,16 @@ def execute_pass(store, reply):
 
 
 def test_plain_request_does_not_classify_or_create_run(store, monkeypatch):
-    monkeypatch.setattr(staff.jev, "classify", lambda _: pytest.fail("Unexpected classifier call"))
+    monkeypatch.setattr(
+        staff.decisions, "classify", lambda _: pytest.fail("Unexpected classifier call")
+    )
     assert store.start("Fix something", "codex", Path.cwd())["status"] == "direct"
     with store.connect() as connection:
         assert connection.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
 
 
 def test_kq_completes_without_agent_actions(store, monkeypatch):
-    monkeypatch.setattr(staff.jev, "classify", lambda _: {"query_kind": "kq"})
+    monkeypatch.setattr(staff.decisions, "classify", lambda _: {"query_kind": "kq"})
     reply = start(store)
     assert reply["status"] == "complete"
     assert reply["query_kind"] == "kq"
@@ -76,7 +78,7 @@ def test_kq_completes_without_agent_actions(store, monkeypatch):
     assert store.status(reply["run_id"]) == reply
 
 
-@pytest.mark.parametrize("harness", staff.jev.HARNESSES)
+@pytest.mark.parametrize("harness", staff.decisions.HARNESSES)
 def test_full_graph_host_protocol_and_followup_bypass(store, harness, monkeypatch):
     reply = start(store, harness)
     run_id = reply["run_id"]
@@ -104,7 +106,9 @@ def test_full_graph_host_protocol_and_followup_bypass(store, harness, monkeypatc
     assert reply["action"] is None
     with pytest.raises(ValueError, match="no pending action"):
         store.advance(run_id, "arbitrary", {})
-    monkeypatch.setattr(staff.jev, "classify", lambda _: pytest.fail("Followup entered graph"))
+    monkeypatch.setattr(
+        staff.decisions, "classify", lambda _: pytest.fail("Followup entered graph")
+    )
     assert store.start("Adjust the change", harness, Path.cwd())["status"] == "direct"
 
 
@@ -137,11 +141,11 @@ def test_review_requires_all_five_distinct_reviewers(store):
 def test_loop_cap_and_unresolved_findings_force_low_confidence(store, monkeypatch, cap):
     severity = {1: "low", 2: "medium", 3: "critical"}[cap]
     monkeypatch.setattr(
-        staff.jev,
+        staff.decisions,
         "classify",
         lambda _: {
             "query_kind": "ccr",
-            "ticket": staff.jev.ticket_payload("chore", ["backend"], {}, severity),
+            "ticket": staff.decisions.ticket_payload("chore", ["backend"], {}, severity),
         },
     )
     reply = advance(store, start(store), CONTEXT)
@@ -176,11 +180,11 @@ def test_loop_cap_and_unresolved_findings_force_low_confidence(store, monkeypatc
 
 def test_revision_cannot_replace_pr_or_worktree(store, monkeypatch):
     monkeypatch.setattr(
-        staff.jev,
+        staff.decisions,
         "classify",
         lambda _: {
             "query_kind": "ccr",
-            "ticket": staff.jev.ticket_payload("chore", ["backend"], {}, "medium"),
+            "ticket": staff.decisions.ticket_payload("chore", ["backend"], {}, "medium"),
         },
     )
     reply = execute_pass(store, advance(store, start(store), CONTEXT))
@@ -192,7 +196,9 @@ def test_revision_cannot_replace_pr_or_worktree(store, monkeypatch):
 
 
 def test_only_relevant_conversations_reach_planner(store, monkeypatch):
-    monkeypatch.setattr(staff.jev, "relevance", lambda _, text: {"relevant": text == "relevant"})
+    monkeypatch.setattr(
+        staff.decisions, "relevance", lambda _, text: {"relevant": text == "relevant"}
+    )
     conversations = [
         {"harness": "codex", "reference": name, "text": name} for name in ["relevant", "irrelevant"]
     ]

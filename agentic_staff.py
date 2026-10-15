@@ -1,16 +1,20 @@
-"""Jev decisions and model policy used by the explicit staff graph."""
+"""OpenAI decisions and model policy used by the explicit staff graph."""
 
 import argparse
 import json
+import logging
 import os
 import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
-from typesafe_sdk import Choice, Noul, TypeSafeClient
+from openai import APIError, OpenAI
 
 SOL = "gpt-6-sol"
 ASTRA = "gpt-6-astra"
+DECISION_MODEL = "gpt-6-luna"
+QUESTION_LIMIT = 200
+LOGGER = logging.getLogger(__name__)
 HIGH = 0.8
 MODERATE = 0.65
 HARNESSES = ("claude", "codex", "pi", "grok")
@@ -61,51 +65,99 @@ def yes_no(yes: str, no: str) -> dict[str, str]:
     return {"true": yes, "false": no}
 
 
+def choice_question(*, instructions: str, criteria: dict[str, str]) -> dict:
+    return {
+        "type": "choice",
+        "instructions": instructions,
+        "choices": [
+            {"value": value, "description": description} for value, description in criteria.items()
+        ],
+    }
+
+
+def predicate_question(*, instructions: str, criteria: dict[str, str]) -> dict:
+    return {
+        "type": "predicate",
+        "instructions": f"{instructions}\nTrue: {criteria['true']}\nFalse: {criteria['false']}",
+    }
+
+
 def load_env() -> None:
     load_dotenv(Path(__file__).with_name(".env.local"), override=False)
 
 
-def ask(state: dict, questions: dict, timeout: int = 20):
-    """Return a Jev response, or None when the call cannot be made."""
+def probability(value) -> float | None:
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and 0 <= value <= 1:
+        return float(value)
+    return None
+
+
+def ask(state: dict, questions: dict[str, dict], timeout: int = 20) -> dict | None:
+    """Return usable answers by name; failed batches and refused answers stay unknown."""
     load_env()
-    if not os.getenv("TYPESAFE_API_KEY"):
+    if not os.getenv("OPENAI_API_KEY") or not questions:
         return None
-    try:
-        with TypeSafeClient() as client:
-            return client.system_one(state=state, questions=questions, timeout=timeout)
-    except Exception:
-        return None
+    answers = {}
+    items = list(questions.items())
+    # Disable SDK retries so a failing service does not multiply the phase timeout.
+    with OpenAI(timeout=timeout, max_retries=0) as client:
+        for offset in range(0, len(items), QUESTION_LIMIT):
+            batch = dict(items[offset : offset + QUESTION_LIMIT])
+            try:
+                response = client.decisions.create(
+                    model=DECISION_MODEL,
+                    input=json.dumps(state),
+                    questions=[{**question, "name": name} for name, question in batch.items()],
+                )
+            except APIError as exc:
+                # Do not print API error bodies, which can include request data.
+                LOGGER.warning(
+                    "Decisions API request failed (%s); using fallback", type(exc).__name__
+                )
+                continue
+            seen = set()
+            for answer in getattr(response, "answers", None) or []:
+                name = getattr(answer, "name", None)
+                if not isinstance(name, str) or name not in batch:
+                    continue
+                if name in seen:
+                    answers.pop(name, None)
+                    continue
+                seen.add(name)
+                question = batch[name]
+                if getattr(answer, "type", None) != question["type"]:
+                    continue
+                if answer.type == "predicate":
+                    score = probability(getattr(answer, "probability", None))
+                    if score is not None:
+                        answers[name] = {"probability": score}
+                elif answer.type == "choice":
+                    label = getattr(answer, "choice", None)
+                    score = probability(getattr(answer, "confidence", None))
+                    if score is not None and any(
+                        label == option["value"] for option in question["choices"]
+                    ):
+                        answers[name] = {"choice": label, "confidence": score}
+    return answers
 
 
 def choice_label(response, name: str) -> str | None:
-    if response is None:
-        return None
-    answer = response.choices[name]
-    return answer.choice
+    return (response or {}).get(name, {}).get("choice")
 
 
 def choice_confident(response, name: str, threshold: float = HIGH) -> str | None:
-    if response is None:
+    answer = (response or {}).get(name, {})
+    if answer.get("confidence", 0) < threshold:
         return None
-    answer = response.choices[name]
-    if answer.confidence < threshold:
-        return None
-    return answer.choice
+    return answer.get("choice")
 
 
-def noul_score(response, name: str) -> float | None:
-    """Read a yes/no probability. Jev keeps those on `nouls`, not `choices`."""
-    if response is None:
-        return None
-    nouls = getattr(response, "nouls", None) or {}
-    answer = nouls.get(name)
-    if answer is None:
-        return None
-    return float(answer.noul)
+def predicate_score(response, name: str) -> float | None:
+    return (response or {}).get(name, {}).get("probability")
 
 
 def is_yes(response, name: str, threshold: float) -> bool:
-    score = noul_score(response, name)
+    score = predicate_score(response, name)
     return score is not None and score >= threshold
 
 
@@ -235,7 +287,7 @@ def classify(task: str) -> dict:
     kind_response = ask(
         {"task": task},
         {
-            "kind": Choice(
+            "kind": choice_question(
                 instructions="Is this a knowledge question or a codebase change request?",
                 criteria={
                     "kq": "An explanation or answer, not a change to the codebase.",
@@ -252,7 +304,7 @@ def classify(task: str) -> dict:
     response = ask(
         {"task": task},
         {
-            "type": Choice(
+            "type": choice_question(
                 instructions="What ticket type is this codebase change?",
                 criteria={
                     "chore": "Cleanup, styling, package upgrade, rename, or stylistic refactor.",
@@ -261,7 +313,7 @@ def classify(task: str) -> dict:
                     "experiment": "A new feature not intended for immediate use.",
                 },
             ),
-            "explicit_severity": Choice(
+            "explicit_severity": choice_question(
                 instructions="Does the request explicitly name a severity?",
                 criteria={
                     "none": "No explicit severity.",
@@ -271,44 +323,44 @@ def classify(task: str) -> dict:
                     "critical": "The user said critical severity.",
                 },
             ),
-            "frontend": Noul(
+            "frontend": predicate_question(
                 instructions="Does the user encounter this on a screen?",
                 criteria=yes_no(
                     "A page, button, or other thing they can see. A named page counts.",
                     "Not encountered on a screen.",
                 ),
             ),
-            "ci_cd": Noul(
+            "ci_cd": predicate_question(
                 instructions="Does the user encounter this in the build or deploy pipeline?",
                 criteria=yes_no("CI, a build, or a deploy.", "Not a build or deploy problem."),
             ),
-            "cloud_infra": Noul(
+            "cloud_infra": predicate_question(
                 instructions="Does the user encounter this in cloud infrastructure?",
                 criteria=yes_no(
                     "AWS, Terraform, Vercel, or another cloud system.",
                     "Not a cloud problem.",
                 ),
             ),
-            "backend": Noul(
+            "backend": predicate_question(
                 instructions="Does the user encounter this through server or service behavior?",
                 criteria=yes_no(
                     "An API, stored data, or other server behavior.",
                     "No server behavior is described.",
                 ),
             ),
-            "bug_latent": Noul(
+            "bug_latent": predicate_question(
                 instructions="Is this bug latent, not currently hitting users in normal use?",
                 criteria={"true": "Latent.", "false": "Users can hit it now."},
             ),
-            "bug_unlikely": Noul(
+            "bug_unlikely": predicate_question(
                 instructions="Is this bug unlikely to be hit again in normal use?",
                 criteria={"true": "Unlikely in normal use.", "false": "Normal use can hit it."},
             ),
-            "bug_live": Noul(
+            "bug_live": predicate_question(
                 instructions="Did a user encounter this bug live?",
                 criteria={"true": "A live user hit it.", "false": "No live encounter."},
             ),
-            "feature_uncoupled": Noul(
+            "feature_uncoupled": predicate_question(
                 instructions="Does existing behavior keep working if this new feature fails?",
                 criteria=yes_no(
                     "Existing behavior does not depend on it.",
@@ -350,14 +402,14 @@ def relevance(task: str, conversation: str) -> dict:
     response = ask(
         {"task": task, "conversation": conversation},
         {
-            "relevant": Noul(
+            "relevant": predicate_question(
                 instructions="Is this prior conversation relevant to the current request?",
                 criteria={"true": "It bears on the request.", "false": "It does not."},
             )
         },
         timeout=8,
     )
-    score = noul_score(response, "relevant")
+    score = predicate_score(response, "relevant")
     if score is None:
         return {"relevant": False, "score": 0.0}
     return {"relevant": score >= HIGH, "score": score}
@@ -367,8 +419,11 @@ def filter_findings(task: str, findings: list) -> list:
     if not findings:
         return []
     questions = {
-        f"f{index}": Noul(
-            instructions="Is this review finding inconsequential for normal use?",
+        f"f{index}": predicate_question(
+            instructions=(
+                f"Evaluate only findings[{index}] in the input (zero-based index). "
+                "Is this review finding inconsequential for normal use?"
+            ),
             criteria={
                 "true": "The path cannot be reached in normal use.",
                 "false": "A normal user or operator can hit it.",
@@ -391,7 +446,7 @@ def confidence(task: str, evidence: str) -> dict:
     response = ask(
         {"task": task, "evidence": evidence},
         {
-            "confidence": Choice(
+            "confidence": choice_question(
                 instructions="Did this change meet a high quality bar?",
                 criteria={
                     "high": "Small blast radius, real tests, and no open material defect.",

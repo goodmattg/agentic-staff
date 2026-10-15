@@ -7,13 +7,14 @@ stay with the base model, including the first message in a new chat.
 The skill is a thin bridge to [staff_graph.py](staff_graph.py). Pydantic Graph
 executes the classification branch, phase transitions, review loop, and completion
 gates. The host model performs each requested tool or agent action and submits its
-result. Jev still supplies classification, relevance, review filtering, and confidence.
+result. The OpenAI Decisions API supplies classification, relevance, review filtering,
+and confidence using `gpt-6-luna`.
 
 ## Install
 
 ```sh
 uv sync --locked
-# If .env.local does not exist, copy .env.local.example and configure Jev.
+# If .env.local does not exist, copy .env.local.example and set OPENAI_API_KEY.
 uv run --locked python install.py
 ```
 
@@ -25,7 +26,40 @@ refresh cached skill metadata.
 
 `pydantic-graph==2.51.0` is pinned, and `uv.lock` pins its dependencies. The graph
 runs locally without a Pydantic account or cloud service. Graph telemetry is off.
-Native agent providers and Jev retain their existing authentication requirements.
+Native coding-agent providers retain their existing authentication requirements.
+Decisions use a separate OpenAI Platform API key; signing into a native coding
+agent does not configure that key.
+
+## Decision configuration
+
+Set `OPENAI_API_KEY` in your shell or the repository's gitignored `.env.local`.
+Existing environment variables take precedence. When migrating an existing install,
+replace `TYPESAFE_API_KEY` with `OPENAI_API_KEY` in `.env.local`, then run
+`uv sync --locked`. Jev and `typesafe-sdk` are no longer used. The installer does
+not rewrite your existing credentials.
+
+The decision layer uses `POST /v1/decisions` through the OpenAI Python SDK
+(`>=3.26.0,<4`, pinned in `uv.lock`). The endpoint currently supports `gpt-6-luna`
+and is in public beta. See the [Decisions guide](https://developers.openai.com/api/docs/guides/decisions)
+and [API reference](https://developers.openai.com/api/reference/resources/decisions/methods/create).
+Requests send the task and, depending on the phase, conversation excerpts, review
+findings, or execution/testing evidence. Native planning and execution models are
+still selected by the local severity table.
+
+Categorical decisions use `choice`; yes/no decisions use `predicate`. Scope detection
+uses a probability threshold of `0.65`; relevance, inconsequential finding removal,
+severity flags, and confident choices use `0.8`. These retain the old thresholds;
+they have not been calibrated for parity with Jev. Each finding question identifies
+its zero-based input index. Requests with more than 200 questions are split into
+batches; refused, missing, or invalid answers remain unknown independently.
+
+Missing query-kind answers use the existing keyword heuristic. Missing ticket
+fields use the existing defaults: chore type, unknown scope, and unset flags.
+Without a key, change requests therefore become low-severity chores with unknown
+scope. Unknown relevance is excluded, unknown findings are retained, and unknown
+final confidence stays low. API failures log only the exception class to stderr. SDK
+retries are disabled: requests time out after 8 seconds for query kind, relevance,
+and final confidence, or 20 seconds per batch for ticket details and finding filters.
 
 ## Workflow
 
@@ -108,10 +142,33 @@ run ID; it does not reactivate or overwrite a previous run.
 ## Development
 
 - `staff_graph.py`: executable nodes, result schemas, checkpoint store, and CLI.
-- `agentic_staff.py`: Jev decisions, severity rules, model selection, and testing policy.
+- `agentic_staff.py`: OpenAI decisions, severity rules, model selection, and testing policy.
 - `skills/staff/SKILL.md`: host transport shim.
 - `skills/staff/references/reviewers.md`: isolated reviewer prompts.
 - `install.py`: local harness installation and legacy hook migration.
+
+### Updating a local Codex installation
+
+The installer symlinks `~/.codex/skills/staff`, `staff-graph`, and
+`isolated-pr-workflow` to this checkout. The staff launcher resolves that link and
+starts a fresh Python process using `uv run --locked --project <checkout>` on every
+command. Python and script changes in the linked checkout apply on the next command;
+no reinstall is needed. Dependency changes require an updated `uv.lock`; `uv run`
+syncs automatically, or run `uv sync --locked` explicitly.
+
+After changing skill instructions or references, start a fresh Codex session to
+avoid reusing instructions already loaded into a conversation. Rerun
+`uv run --locked python install.py` after changing `hosts/sticky.md` or the generated
+agent model/effort definitions in `agentic_staff.py`: the installer copies those
+into `~/.codex/AGENTS.md` and `~/.codex/agents/*.toml`. Start a fresh session afterward.
+Also rerun the installer if the checkout moves.
+
+Only edits in the linked checkout are active. A separate PR worktree does not
+change the installed skill. After merging, update the linked checkout; avoid
+installing from a temporary worktree that will later be removed. Installs are local
+to each machine. To inspect the current link, run `ls -ld ~/.codex/skills/staff`.
+
+### Verification
 
 ```sh
 uv run --locked ruff check .
@@ -119,7 +176,23 @@ uv run --locked ruff format --check .
 uv run --locked pytest
 ```
 
-Tests run the real graph with substituted Jev decisions and simulated native-agent
-results. They cover all four harness payloads, persistent resume, stale callbacks,
-loop limits, finalization gates, explicit entry, and installation migration. They
-do not launch paid agents or publish test PRs.
+The default test suite makes no paid API calls. Unit and graph tests cover decision
+mapping, thresholds, API failures, refusals, batching, all four harness payloads,
+persistent resume, stale callbacks, loop limits, finalization gates, explicit entry,
+and installation migration. CLI end-to-end tests run fresh Python processes through
+the real graph, SQLite store, and OpenAI SDK against a local HTTP fixture. They
+exercise ready and draft completion, retained material findings, refused confidence,
+and the knowledge-question branch. Native agent results and PR actions are synthetic;
+tests do not launch coding agents or publish test PRs.
+
+To additionally test the real OpenAI endpoint with synthetic evidence (incurs API
+usage; requires `OPENAI_API_KEY` and access to `gpt-6-luna`):
+
+```sh
+STAFF_LIVE_DECISIONS=1 uv run --locked pytest tests/test_decisions_live.py -v
+```
+
+The live checks exercise all four decision functions and a complete CLI/checkpoint
+roundtrip with real decisions and synthetic host results. They verify a material
+finding keeps the final PR state draft. They are smoke tests, not a calibration
+study or a test of native coding-agent execution.
