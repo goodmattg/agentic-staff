@@ -88,9 +88,18 @@ def main():
     diagram = GRAPH.render(direction="LR")
     (output / "workflow.mmd").write_text(diagram)
     env = os.environ.copy()
-    chrome = Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-    if chrome.exists():
-        env.setdefault("PUPPETEER_EXECUTABLE_PATH", str(chrome))
+    chrome_candidates = (
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        str(Path.home() / "Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+        shutil.which("google-chrome"),
+        shutil.which("google-chrome-stable"),
+        shutil.which("chromium"),
+        shutil.which("chromium-browser"),
+    )
+    for chrome in chrome_candidates:
+        if chrome and os.access(chrome, os.X_OK):
+            env.setdefault("PUPPETEER_EXECUTABLE_PATH", chrome)
+            break
     with tempfile.TemporaryDirectory(prefix="staff-diagram-") as temporary:
         config = Path(temporary) / "mermaid.json"
         config.write_text(

@@ -46,6 +46,8 @@ Rendering uses Mermaid CLI (`mmdc`). `--serve` prints a clickable URL; `--open`
 also opens it. The viewer binds only to `127.0.0.1` and stops after an hour without
 requests. The generated HTML also works as a standalone local file.
 The renderer was verified with `@mermaid-js/mermaid-cli@11.16.0` and local Chrome.
+It automatically uses installed Chrome or Chromium on macOS and Linux, with
+`PUPPETEER_EXECUTABLE_PATH` taking precedence when set.
 Artifacts (`workflow.html`, `.svg`, `.png`, and `.mmd`) go into a new temporary
 directory by default. Use `--output-dir PATH` to choose another location.
 Generated diagrams are not checked in; each invocation uses the current graph.
