@@ -246,3 +246,26 @@ def test_diagram_is_built_from_executable_nodes():
     assert "Synthesize -->" in diagram
     assert "Confidence --> Finalize" in diagram
     assert "AwaitHost" in diagram
+
+
+def test_review_delivers_typed_boundary_audit_without_target_configuration(store, tmp_path):
+    workspace = tmp_path / "target"
+    workspace.mkdir()
+    reply = store.start("Refactor data flow", "codex", workspace, explicit=True)
+    reply = advance(store, reply, CONTEXT)
+    reply = advance(store, reply, {"plan": "Use the existing typed models"})
+    reply = advance(store, reply, {**EXECUTION, "worktree": str(workspace)})
+    assert reply["action"]["kind"] == "review"
+    assert reply["action"]["payload"]["execution"]["worktree"] == str(workspace)
+    jobs = {job["reviewer"]: job["instructions"] for job in reply["action"]["payload"]["jobs"]}
+    assert set(jobs) == set(staff.REVIEWERS)
+    steve = jobs["Steve"]
+    assert (
+        "JSON → validate/normalize once → pass typed models → serialize at the output boundary"
+        in steve
+    )
+    assert "Mapping[str, Any]" in steve
+    assert "model_dump()" in steve
+    assert "typed keyed collections" in steve
+    assert "Do not require or add Staff-specific" in steve
+    assert list(workspace.iterdir()) == []

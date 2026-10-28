@@ -272,7 +272,8 @@ class Review(BaseNode[RunState, None, dict]):
             state,
             "review",
             "Run the five reviewer jobs as isolated subagents, in parallel as capacity permits. "
-            "Each gets only its own rubric and the implementation evidence. They do not edit. "
+            "Each gets only its own rubric and the implementation evidence. Inspect the execution "
+            "worktree and read applicable repository instructions when present. They do not edit. "
             "Return all five reviews; an empty list means that reviewer found no defects.",
             {"jobs": reviewer_jobs(), "execution": state.execution, "plan": state.plan},
         )

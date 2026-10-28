@@ -144,7 +144,7 @@ run ID; it does not reactivate or overwrite a previous run.
 - `staff_graph.py`: executable nodes, result schemas, checkpoint store, and CLI.
 - `agentic_staff.py`: OpenAI decisions, severity rules, model selection, and testing policy.
 - `skills/staff/SKILL.md`: host transport shim.
-- `skills/staff/references/reviewers.md`: isolated reviewer prompts.
+- `skills/staff/references/reviewers.md`: isolated reviewer prompts. Steve owns the typed-data-boundary audit (validate/normalize once, carry models internally, serialize at output). The graph supplies this rubric directly; target repositories do not need Staff-specific instructions.
 - `install.py`: local harness installation and legacy hook migration.
 
 ### Updating a local Codex installation
